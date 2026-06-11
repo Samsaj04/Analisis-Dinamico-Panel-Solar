@@ -32,15 +32,13 @@ class Material:
         self.zeta = zeta    #Tasa de Amortiguamiento
         
 class Conditions:
-    def __init__(self, mat, mat_list, L, b, w, ms=None, t=None):
+    def __init__(self, mat, mat_list, L, b, w, t=None):
         self.mat = mat  #Material de entrada
         self.mat_list = mat_list #Lista de todos los materiales
         
         self.L = L  #Largo [m]
         self.b = b  #Ancho [m]
         self.w = w  #Alto  [m]
-        
-        self.ms = ms #Masa [kg] (sobreescribir en caso de no tener densidad uniforme)
         self.t = t  #Espesor [m] (>0 si se usa viga hueca)
         
     #Decorador property para convertir atributos en propiedades dinámicas
@@ -53,13 +51,8 @@ class Conditions:
     @property
     def m(self): #Masa [kg]
         if self.ms is None:
-            return self.A*self.L*self.new_rho()
+            return self.A*self.L*self.mat.rho
         return self.ms
-
-    def new_rho(self):
-        if self.ms is None:
-            return self.mat.rho
-        return self.ms/(self.A * self.L)
     
     @property
     def I(self): #Inercia de Area [m^4]
@@ -98,7 +91,7 @@ class Conditions:
         
     # Función de la frecuencia angular del panel oscilando en modo natural
     def omega(self, N):
-        return self.Bn_L(N)**2 * np.sqrt(self.mat.E * self.I / (self.new_rho() * self.A * self.L**4))
+        return self.Bn_L(N)**2 * np.sqrt(self.mat.E * self.I / (self.mat.rho * self.A * self.L**4))
     
     # Frecuencia del panel oscilando en modo natural
     def Fn(self, N):
@@ -128,6 +121,29 @@ class Conditions:
         plt.legend()
         if save:
             plt.savefig("fig1_formas_modales.pdf", dpi=300)
+        plt.show()
+        
+    def plot_frec_omega(self, rang, save=False):
+
+        fig, ax = plt.subplots(figsize=(8,5))
+        
+        X = [i for i in range(rang[0], rang[1]+1)]
+        ome = [self.Fn(i) for i in X]
+        
+        plt.plot(X, ome, 'o')
+        for i in range(rang[1]-rang[0]+1):
+            plt.text(X[i]+0.1, ome[i]+0.1, s=f"{ome[i]:.4f}", fontsize=8, bbox=dict(
+        facecolor='white',
+        edgecolor='black',
+        boxstyle='round,pad=0.3'))
+        
+        plt.xlabel("Modo Natural [n]")
+        plt.ylabel("Frecuencia Natural [Hz]")
+        plt.xticks(np.arange(rang[0], rang[1]+1, 1))
+        #plt.title(f"Frecuencia Natural de Viga en distintos modos")
+        plt.grid(True, linestyle='--', alpha=0.5)
+        if save:
+            plt.savefig("fig11_modo_vs_frecuencia.pdf", dpi=300)
         plt.show()
 
     #Gráfica del Factor de Amplificación con respecto a la tasa de frecuencias
@@ -222,51 +238,58 @@ class Conditions:
         
     def plots_log(self, f, rang, save=False):
         self.plot_Wn(rang, save)
+        self.plot_frec_omega(rang, save)
         self.plot_FM(save)
         self.plot_Fn_vs_w(f, rang, save)
         self.plot_Fn_vs_h_mats(f, rang, save)
         self.plot_BStress(rang, save)
-
+        
 #====================================================================
 #====================================================================
 def main():
-    alum = Material(
-        name="Al6061-T6",
+    
+    inconel = Material(
+        name="INCONEL Alloy 718",
+        E=1.1e09,  
+        rho=8190,
+        zeta=0.0001)
+    
+    FG = Material(
+        name="Fiber Glass",
         E=68.9e09,  
-        rho=2700,
-        zeta=0.000625)
+        rho=2550,
+        zeta=0.0025)
 
     tit = Material(
         name="Titanium Alloy",
         E=114e09,  
-        rho=4430,
+        rho=1389.58,
         zeta=0.00015)
 
     CFRP = Material(
         name="Carbon Fiber",
         E=150e09,  
-        rho=1600,
+        rho=1389.58,
         zeta=0.0009)
 
-    AL_alloy = Material(
-        name="Aluminum Alloy",
+    FALCON = Material(
+        name="TiAlV Alloy [FALCON]",
         E=140e09,  
-        rho=1389.58,
+        rho=15798.436,
         zeta=0.000625)
 
-    S2 = Conditions(
-        mat=AL_alloy,
-        mat_list=[alum, tit, CFRP],
+    S1 = Conditions(
+        mat=FALCON,
+        mat_list=[inconel, FG, tit, CFRP],
         L=1.1,
         b=20.3/1000,
         w=20.3/1000,
-        t=1.27/1000,
-        ms=1.68)
+        t=1.27/1000)
 
     rango_frec = [20, 100]
     ran = [1, 3]
     
-    S2.plots_log(rango_frec, ran, save=True)
+    S1.plots_log(rango_frec, ran, save=True)
     
 if __name__ == "__main__":
     main()
